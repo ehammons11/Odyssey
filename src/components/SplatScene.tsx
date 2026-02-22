@@ -1,17 +1,26 @@
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
+import { Vector3 } from "three";
+
+const DEFAULT_POSITION: [number, number, number] = [0, 0, 0];
 
 interface SplatSceneProps {
   url: string;
+  position?: [number, number, number];
 }
+
+const WORLD_POSITION = new Vector3(0, 1, 0);
 
 /**
  * Sets up the SparkRenderer and SplatMesh for rendering splat data.
  *
  * @param url The URL of the splat file to load.
  */
-export function SplatScene({ url }: SplatSceneProps) {
+export function SplatScene({
+  url,
+  position = DEFAULT_POSITION,
+}: SplatSceneProps) {
   const { gl, scene } = useThree();
 
   useEffect(() => {
@@ -21,15 +30,21 @@ export function SplatScene({ url }: SplatSceneProps) {
 
     // Create SplatMesh.
     const splat = new SplatMesh({ url });
-    splat.position.set(0, 0, 0);
+    splat.position.set(...position);
     scene.add(splat);
+
+    // Render environment map.
+    spark.renderEnvMap({
+      scene,
+      worldCenter: WORLD_POSITION,
+    });
 
     // Wait for splat to load.
     return () => {
       scene.remove(spark);
       scene.remove(splat);
     };
-  }, [gl, scene, url]);
+  }, [gl, scene, url, position]);
 
   return null;
 }

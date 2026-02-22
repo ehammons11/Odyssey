@@ -12,6 +12,7 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
     "@elevenlabs/react": "^0.14.0",
+    "@preact/signals": "^2.7.0",
     "@preact/signals-react": "^3.8.0",
     "@react-spring/three": "^10.0.3",
     "@react-three/drei": "^10.7.7",
@@ -19,6 +20,7 @@
     "@react-three/uikit": "^1.0.61",
     "@react-three/xr": "^6.6.29",
     "@sparkjsdev/spark": "^0.1.10",
+    "deepsignal": "^1.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.182.0",

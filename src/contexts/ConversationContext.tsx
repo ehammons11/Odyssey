@@ -1,10 +1,14 @@
-import { createContext, type ReactNode } from "react";
+import { createContext, useCallback, useRef, type ReactNode } from "react";
 import { useConversation } from "@elevenlabs/react";
+import { environmentStore } from "../stores/environmentStore";
+
+type OnAudioCallback = (audio: string) => void;
 
 interface ConversationContextType {
   conversation: ReturnType<typeof useConversation>;
   startSession: () => void;
   endSession: () => void;
+  setOnAudio: (callback: OnAudioCallback | null) => void;
   isConnected: boolean;
 }
 
@@ -22,16 +26,30 @@ interface ConversationProviderProps {
  * Provider component for managing conversation state and actions.
  */
 export function ConversationProvider({ children }: ConversationProviderProps) {
+  const onAudioRef = useRef<OnAudioCallback | null>(null);
+
+  const setOnAudio = useCallback((callback: OnAudioCallback | null) => {
+    onAudioRef.current = callback;
+  }, []);
+
   const conversation = useConversation({
     onConnect: () => console.log("Connected to conversation"),
     onDisconnect: () => console.log("Disconnected from conversation"),
     onError: (error: string) => console.error("Conversation error:", error),
+    onAudio: (audio) => onAudioRef.current?.(audio),
+    volume: 0.0,
   });
 
   const startSession = () => {
     conversation.startSession({
-      agentId: "agent_01jxkjstcmf0pttkh1zq3t1jwc",
-      connectionType: "webrtc",
+      agentId: "REDACTED_AGENT_ID",
+      connectionType: "websocket",
+      clientTools: {
+        changeEnvironment: async () => {
+          console.log("Received request to change environment");
+          environmentStore.next();
+        },
+      },
     });
   };
 
@@ -39,13 +57,14 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     conversation.endSession();
   };
 
-  // Determine if we're connected based on the conversation status
+  // Determine if we're connected based on the conversation status.
   const isConnected = conversation.status === "connected";
 
   const value: ConversationContextType = {
     conversation,
     startSession,
     endSession,
+    setOnAudio,
     isConnected,
   };
 
