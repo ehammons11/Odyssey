@@ -2,7 +2,7 @@ import { type ThreeElements, useFrame } from "@react-three/fiber";
 import { OctahedronCharacter } from "@/components/characters/OctahedronCharacter";
 import { Float } from "@react-three/drei";
 import { useCallback, useEffect, useRef } from "react";
-import { MeshPhysicalMaterial, SphereGeometry, type Group } from "three";
+import { type Group } from "three";
 import {
   SpatialAudioSource,
   type SpatialAudioSourceRef,
@@ -10,13 +10,6 @@ import {
 import { useConversationContext } from "@/hooks/useConversationContext";
 
 const ROTATION_SPEED = 0.3;
-
-const ORB_GEOMETRY = new SphereGeometry(1, 32, 32);
-const ORB_MATERIAL = new MeshPhysicalMaterial({
-  transmission: 1.0,
-  transparent: true,
-  roughness: 0,
-});
 
 /**
  * Custom character for Ethan's Odyssey.
@@ -51,7 +44,7 @@ export function EthanCharacter(props: ThreeElements["group"]) {
       <Float floatIntensity={2} rotationIntensity={2}>
         <OctahedronCharacter color="#641547" />
         <SpatialAudioSource ref={audioRef} />
-        <mesh geometry={ORB_GEOMETRY} material={ORB_MATERIAL} />
+        {/* <mesh geometry={ORB_GEOMETRY} material={ORB_MATERIAL} renderOrder={2} /> */}
       </Float>
     </group>
   );

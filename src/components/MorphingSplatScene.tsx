@@ -5,8 +5,12 @@ import { Vector3 } from "three";
 import { environmentStore } from "../stores/environmentStore";
 
 interface MorphingSplatSceneProps {
-  /** Splat file URLs for each environment. */
-  urls: string[];
+  /**
+   * Splat file URLs for each environment. An `undefined` entry means that
+   * environment has no splat (e.g. a "default" environment). The array
+   * index must match the environment index in the store.
+   */
+  urls: (string | undefined)[];
   /** Optional per-environment positions for the splat meshes. */
   positions?: ([number, number, number] | undefined)[];
   /** Duration of the morph transition in seconds. Defaults to 3. */
@@ -180,7 +184,11 @@ export function MorphingSplatScene({
       for (let i = 0; i < urls.length; i++) {
         if (disposed) return;
 
-        const mesh = new SplatMesh({ url: urls[i] });
+        const url = urls[i];
+        // Skip environments with no splat (e.g. a default environment).
+        if (!url) continue;
+
+        const mesh = new SplatMesh({ url });
         await mesh.initialized;
         if (disposed) return;
 
@@ -188,6 +196,8 @@ export function MorphingSplatScene({
         if (pos) mesh.position.set(...pos);
 
         // Assign the morph modifier so the dyno shader controls visibility.
+        // objectIndex must match the environment index in the store, NOT the
+        // mesh array index, so that from/to indices line up correctly.
         mesh.worldModifier = createMorphModifier(
           fromIndexRef.current!,
           toIndexRef.current!,

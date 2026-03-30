@@ -109,8 +109,16 @@ export const SpatialAudioSource = forwardRef<
 
     return () => {
       events.forEach((e) => document.removeEventListener(e, onGesture));
-      gain.disconnect();
-      positionalAudio.disconnect();
+      try {
+        gain.disconnect();
+      } catch {
+        // Node may not be connected
+      }
+      try {
+        positionalAudio.disconnect();
+      } catch {
+        // Node may not be connected
+      }
       group.remove(positionalAudio);
       camera.remove(listener);
     };

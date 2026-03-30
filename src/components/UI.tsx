@@ -19,7 +19,7 @@ const DEFAULT_OPACITY = 0.5;
  */
 export function UI(props: ContainerProperties) {
   return (
-    <Fullscreen pointerEvents="listener">
+    <Fullscreen pointerEvents="listener" renderOrder={2}>
       <Container flexDirection="column" flexGrow={3}>
         <Container
           flexGrow={3}
