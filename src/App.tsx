@@ -1,11 +1,32 @@
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Environment, OrbitControls } from "@react-three/drei";
 import { EthanCharacter } from "./components/characters/Custom/EthanCharacter";
 import { UI } from "./components/UI";
 import { IfInSessionMode, createXRStore, XR } from "@react-three/xr";
 import { ConversationProvider } from "./contexts/ConversationContext";
 import { EnvironmentLoader } from "./components/EnvironmentLoader";
 import { ethanEnvironments } from "./environments/ethan";
+import { Dome } from "./components/Dome";
+import { StartScene } from "./components/titleScreen/StartScene";
+import { SceneFader } from "./components/SceneFader";
+import { sceneStore } from "./stores/sceneStore";
+import { useSignals } from "@preact/signals-react/runtime";
+
+function SceneContent() {
+  useSignals();
+
+  if (sceneStore.odysseyStarted) {
+    return (
+      <>
+        <EnvironmentLoader environments={ethanEnvironments} />
+        <EthanCharacter position={[0, 1, -0.3]} scale={0.2} />
+        <Dome position={[0, 0, 0]} scale={1} />
+      </>
+    );
+  }
+
+  return <StartScene />;
+}
 
 function App() {
   const store = createXRStore({ foveation: 0, offerSession: false });
@@ -23,9 +44,11 @@ function App() {
         }}
       >
         <XR store={store}>
-          <EnvironmentLoader environments={ethanEnvironments} />
+          <SceneContent />
 
-          <EthanCharacter position={[0, 1, -0.3]} scale={0.2} />
+          <Environment background files="./environmentMaps/puresky_2.exr" />
+
+          <SceneFader />
 
           <OrbitControls />
 

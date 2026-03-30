@@ -7,6 +7,14 @@ import type { EnvironmentProps } from "../../components/Environment";
  */
 export const ethanEnvironments: EnvironmentProps[] = [
   {
+    name: "Default",
+    lights: [
+      { type: "ambient", intensity: 1 },
+      { type: "directional", intensity: 1, position: [0, 5, 5] },
+    ],
+    backgroundColor: "#000000",
+  },
+  {
     name: "Apocalyptic City",
     splatUrl: "/splats/apocalypticCity.spz",
     lights: [

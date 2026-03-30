@@ -23,10 +23,14 @@
     "deepsignal": "^1.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "three": "^0.182.0",
+    "three": "0.183.2",
     "three-stdlib": "^2.36.1"
   },
   "pnpm": {
+    "overrides": {
+      "three": "0.183.2",
+      "@types/three": "0.183.1"
+    },
     "packageExtensions": {
       "@iwer/sem": {
         "dependencies": {
@@ -41,7 +45,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.182.0",
+    "@types/three": "0.183.1",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

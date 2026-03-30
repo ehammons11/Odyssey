@@ -26,6 +26,7 @@ export function SplatScene({
   useEffect(() => {
     // Create SparkRenderer with the WebGL renderer.
     const spark = new SparkRenderer({ renderer: gl });
+    spark.renderOrder = 999;
     scene.add(spark);
 
     // Create SplatMesh.

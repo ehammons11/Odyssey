@@ -60,7 +60,8 @@ export function Light({
 
 export interface EnvironmentProps {
   name: string;
-  splatUrl: string;
+  /** URL of the splat file. Omit for a "default" environment with no splat. */
+  splatUrl?: string;
   splatPosition?: [number, number, number];
   lights: LightProps[];
   backgroundColor?: ColorRepresentation;
@@ -84,7 +85,7 @@ export function Environment({
 }: EnvironmentProps) {
   return (
     <>
-      <SplatScene url={splatUrl} position={splatPosition} />
+      {splatUrl && <SplatScene url={splatUrl} position={splatPosition} />}
 
       {lights.map((light, i) => (
         <Light key={`${name}-light-${i}`} {...light} />
