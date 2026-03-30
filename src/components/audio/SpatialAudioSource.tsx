@@ -91,7 +91,14 @@ export function SpatialAudioSource({
         // Node may not be connected
       }
     };
-  }, [mediaStream]);
+  }, [
+    mediaStream,
+    camera,
+    refDistance,
+    rolloffFactor,
+    maxDistance,
+    distanceModel,
+  ]);
 
   return <group ref={groupRef} />;
 }
