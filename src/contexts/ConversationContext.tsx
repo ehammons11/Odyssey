@@ -90,7 +90,11 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       disconnectObserver();
       setAgentMediaStream(null);
     },
-    onError: (error: string) => console.error("Conversation error:", error),
+    onError: (error: string) => {
+      console.error("Conversation error:", error);
+      disconnectObserver();
+      setAgentMediaStream(null);
+    },
   });
 
   const startSession = () => {
