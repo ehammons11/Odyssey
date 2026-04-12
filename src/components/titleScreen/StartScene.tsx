@@ -4,6 +4,7 @@ import { useSpringValue } from "@react-spring/three";
 import { useFrame } from "@react-three/fiber";
 import { Title } from "./Title";
 import { sceneStore } from "@/stores/sceneStore";
+import { playSound } from "@/utils/playSound";
 
 const HOVER_OPACITY = 1;
 const DEFAULT_OPACITY = 0.6;
@@ -43,7 +44,10 @@ function StartButton() {
         onHoverChange={(hover: boolean) => {
           buttonOpacitySpring.start(hover ? HOVER_OPACITY : DEFAULT_OPACITY);
         }}
-        onClick={() => sceneStore.startOdyssey()}
+        onClick={() => {
+          playSound("/audio/button.wav");
+          sceneStore.startOdyssey();
+        }}
       >
         <Text textAlign="center" fontWeight="black" color="black">
           Start
