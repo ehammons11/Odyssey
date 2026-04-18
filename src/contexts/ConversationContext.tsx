@@ -14,6 +14,7 @@ interface ConversationContextType {
   endSession: () => void;
   agentMediaStream: MediaStream | null;
   isConnected: boolean;
+  isSpeaking: boolean;
 }
 
 const ConversationContext = createContext<ConversationContextType | undefined>(
@@ -129,6 +130,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     endSession,
     agentMediaStream,
     isConnected,
+    isSpeaking: conversation.isSpeaking,
   };
 
   return (
