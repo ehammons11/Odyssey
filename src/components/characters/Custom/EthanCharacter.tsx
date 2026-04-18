@@ -1,7 +1,14 @@
 import { type ThreeElements, useFrame } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import { useRef } from "react";
-import { DoubleSide, type Group, type Mesh, MathUtils, Vector3 } from "three";
+import {
+  DoubleSide,
+  type Group,
+  type Mesh,
+  MathUtils,
+  MeshStandardMaterial,
+  Vector3,
+} from "three";
 import { SpatialAudioSource } from "@/components/audio/SpatialAudioSource";
 import { useConversationContext } from "@/hooks/useConversationContext";
 import { Eyeball } from "@/components/Eyeball";
@@ -32,6 +39,12 @@ export function EthanCharacter(props: ThreeElements["group"]) {
     </group>
   );
 }
+
+const eyeSocketMaterial = new MeshStandardMaterial({
+  color: "black",
+  side: DoubleSide,
+  roughness: 1.0,
+});
 
 // These create the opening in the eye socket.
 const SOCKET_PHI_START = (1.15 * Math.PI) / 2;
@@ -114,25 +127,30 @@ function CharacterEye(props: ThreeElements["group"]) {
   return (
     <group {...props}>
       {/* Eye Socket */}
-      <mesh rotation={[0, 0, -Math.PI / 2]}>
+      <mesh rotation={[0, 0, -Math.PI / 2]} material={eyeSocketMaterial}>
         <sphereGeometry
           args={[1.05, 16, 16, SOCKET_PHI_START, SOCKET_PHI_LENGTH]}
         />
-        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
       </mesh>
       {/* Top Eyelid */}
-      <mesh ref={topLidRef} rotation={[0, 0, -Math.PI / 2]}>
+      <mesh
+        ref={topLidRef}
+        rotation={[0, 0, -Math.PI / 2]}
+        material={eyeSocketMaterial}
+      >
         <sphereGeometry
           args={[1.05, 16, 16, TOP_LID_PHI_START, TOP_LID_PHI_LENGTH]}
         />
-        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
       </mesh>
       {/* Bottom Eyelid */}
-      <mesh ref={bottomLidRef} rotation={[0, 0, -Math.PI / 2]}>
+      <mesh
+        ref={bottomLidRef}
+        rotation={[0, 0, -Math.PI / 2]}
+        material={eyeSocketMaterial}
+      >
         <sphereGeometry
           args={[1.05, 16, 16, BOTTOM_LID_PHI_START, BOTTOM_LID_PHI_LENGTH]}
         />
-        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
       </mesh>
       <Eyeball ref={eyeballRef} />
     </group>
