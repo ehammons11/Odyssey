@@ -1,10 +1,12 @@
 import { type ThreeElements, useFrame } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
 import { useRef } from "react";
-import { DoubleSide, type Group, MathUtils, Vector3 } from "three";
+import { DoubleSide, type Group, type Mesh, MathUtils, Vector3 } from "three";
 import { SpatialAudioSource } from "@/components/audio/SpatialAudioSource";
 import { useConversationContext } from "@/hooks/useConversationContext";
 import { Eyeball } from "@/components/Eyeball";
+import { ButterflyWing } from "@/components/characters/components/ButterflyWing";
+import { useSignal } from "@preact/signals-react";
 
 /**
  * Custom character for Ethan's Odyssey.
@@ -13,11 +15,18 @@ export function EthanCharacter(props: ThreeElements["group"]) {
   const { agentMediaStream } = useConversationContext();
 
   const groupRef = useRef<Group>(null);
+  const flapSpeed = useSignal(10.0);
 
   return (
     <group ref={groupRef} {...props}>
-      <Float floatIntensity={2} rotationIntensity={2}>
-        <CharacterEye />
+      <Float floatIntensity={2} rotationIntensity={2} speed={4}>
+        <CharacterEye scale={0.5} />
+        <ButterflyWing
+          rotation={[Math.PI / 4, 0, 0]}
+          position={[0, 0.4, -0.2]}
+          scale={3}
+          flapSpeed={flapSpeed}
+        />
         <SpatialAudioSource mediaStream={agentMediaStream} />
       </Float>
     </group>
@@ -27,6 +36,12 @@ export function EthanCharacter(props: ThreeElements["group"]) {
 // These create the opening in the eye socket.
 const SOCKET_PHI_START = (1.15 * Math.PI) / 2;
 const SOCKET_PHI_LENGTH = (3.4 * Math.PI) / 2;
+const BOTTOM_LID_PHI_START = SOCKET_PHI_START;
+const BOTTOM_LID_PHI_LENGTH = Math.PI / 16;
+const TOP_LID_PHI_LENGTH =
+  2 * Math.PI - SOCKET_PHI_LENGTH - BOTTOM_LID_PHI_LENGTH;
+const TOP_LID_PHI_START =
+  SOCKET_PHI_START + SOCKET_PHI_LENGTH - TOP_LID_PHI_LENGTH;
 
 // Reusable vectors to avoid per-frame allocations
 const _eyeWorld = new Vector3();
@@ -41,12 +56,19 @@ const EYE_PITCH_MIN = -0;
 const EYE_PITCH_MAX = 0.3;
 const EYE_SMOOTH_SPEED = 20;
 
+// Blink timing
+const BLINK_DURATION = 0.2; // seconds for a full blink (close + open)
+const BLINK_INTERVAL = 3.0; // seconds between blinks
+
 /**
  * CharacterEye is a custom eye component that includes a black sphere for the eye socket.
  * The eyeball will track the camera within defined yaw/pitch limits to create a more lifelike character.
  */
 function CharacterEye(props: ThreeElements["group"]) {
   const eyeballRef = useRef<Group>(null);
+  const topLidRef = useRef<Mesh>(null);
+  const bottomLidRef = useRef<Mesh>(null);
+  const blinkTimeRef = useRef(0);
 
   useFrame(({ camera }, delta) => {
     if (!eyeballRef.current?.parent) return;
@@ -77,15 +99,40 @@ function CharacterEye(props: ThreeElements["group"]) {
       -clampedPitch,
       t,
     );
+
+    blinkTimeRef.current += delta;
+    // sin gives a smooth eased 0→1→0 arc during the blink window, 0 otherwise
+    const phase = blinkTimeRef.current % (BLINK_INTERVAL + BLINK_DURATION);
+    const closedAmount =
+      phase < BLINK_DURATION ? Math.sin((phase / BLINK_DURATION) * Math.PI) : 0;
+    if (topLidRef.current)
+      topLidRef.current.rotation.x = closedAmount * TOP_LID_PHI_LENGTH;
+    if (bottomLidRef.current)
+      bottomLidRef.current.rotation.x = -closedAmount * BOTTOM_LID_PHI_LENGTH;
   });
 
   return (
     <group {...props}>
+      {/* Eye Socket */}
       <mesh rotation={[0, 0, -Math.PI / 2]}>
         <sphereGeometry
-          args={[1.05, 32, 32, SOCKET_PHI_START, SOCKET_PHI_LENGTH]}
+          args={[1.05, 16, 16, SOCKET_PHI_START, SOCKET_PHI_LENGTH]}
         />
-        <meshStandardMaterial color="black" side={DoubleSide} />
+        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
+      </mesh>
+      {/* Top Eyelid */}
+      <mesh ref={topLidRef} rotation={[0, 0, -Math.PI / 2]}>
+        <sphereGeometry
+          args={[1.05, 16, 16, TOP_LID_PHI_START, TOP_LID_PHI_LENGTH]}
+        />
+        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
+      </mesh>
+      {/* Bottom Eyelid */}
+      <mesh ref={bottomLidRef} rotation={[0, 0, -Math.PI / 2]}>
+        <sphereGeometry
+          args={[1.05, 16, 16, BOTTOM_LID_PHI_START, BOTTOM_LID_PHI_LENGTH]}
+        />
+        <meshStandardMaterial color="black" side={DoubleSide} roughness={1.0} />
       </mesh>
       <Eyeball ref={eyeballRef} />
     </group>
