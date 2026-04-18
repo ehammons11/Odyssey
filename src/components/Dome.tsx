@@ -71,7 +71,7 @@ export function Dome(props: ThreeElements["group"]) {
         rotation={[-Math.PI / 2, 0, 0]}
         material={industrialWallMaterial}
       >
-        <planeGeometry args={[2000, 2000]} />
+        <planeGeometry args={[1000, 1000]} />
       </mesh>
     </group>
   );
