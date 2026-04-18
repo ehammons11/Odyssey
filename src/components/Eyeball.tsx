@@ -5,14 +5,12 @@ import { Mesh, MeshStandardMaterial } from "three";
 
 type GLTFResult = GLTF & {
   nodes: {
-    Object_4: Mesh;
-    Object_5: Mesh;
-    Object_6: Mesh;
+    Eye_Eye_0: Mesh;
+    Eye_Iris_0: Mesh;
   };
   materials: {
-    Eye_outside: MeshStandardMaterial;
-    Eye_outline: MeshStandardMaterial;
-    Eye_inside: MeshStandardMaterial;
+    material: MeshStandardMaterial;
+    Iris: MeshStandardMaterial;
   };
 };
 
@@ -20,28 +18,32 @@ type GLTFResult = GLTF & {
  * Eyeball component that loads and displays a low-poly eyeball model.
  */
 export function Eyeball(props: ThreeElements["group"]) {
-  const { nodes, materials } = useGLTF("/eyeball.glb") as unknown as GLTFResult;
+  const { nodes, materials } = useGLTF(
+    "/human_eye.glb",
+  ) as unknown as GLTFResult;
   return (
     <group {...props} dispose={null}>
-      <group position={[0, 1, 0]}>
-        <mesh
-          castShadow
-          receiveShadow
-          geometry={nodes.Object_4.geometry}
-          material={materials.Eye_outside}
-        />
-        <mesh
-          castShadow
-          receiveShadow
-          geometry={nodes.Object_5.geometry}
-          material={materials.Eye_outline}
-        />
-        <mesh
-          castShadow
-          receiveShadow
-          geometry={nodes.Object_6.geometry}
-          material={materials.Eye_inside}
-        />
+      <group rotation={[-1.807, 0, 0]}>
+        <group rotation={[Math.PI / 1.8, 0, 0]} scale={0.01}>
+          <group
+            position={[0, 0, 16.654]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            scale={100}
+          >
+            <mesh
+              castShadow
+              receiveShadow
+              geometry={nodes.Eye_Eye_0.geometry}
+              material={materials.material}
+            />
+            <mesh
+              castShadow
+              receiveShadow
+              geometry={nodes.Eye_Iris_0.geometry}
+              material={materials.Iris}
+            />
+          </group>
+        </group>
       </group>
     </group>
   );
