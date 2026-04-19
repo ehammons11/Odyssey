@@ -15,6 +15,8 @@ import { Eyeball } from "@/components/Eyeball";
 import { ButterflyWing } from "@/components/characters/components/ButterflyWing";
 import { useSignal } from "@preact/signals-react";
 
+const BASE_FLAP_SPEED = 15.0;
+
 /**
  * Custom character for Ethan's Odyssey.
  */
@@ -22,7 +24,13 @@ export function EthanCharacter(props: ThreeElements["group"]) {
   const { agentMediaStream } = useConversationContext();
 
   const groupRef = useRef<Group>(null);
-  const flapSpeed = useSignal(10.0);
+  const flapSpeed = useSignal(BASE_FLAP_SPEED);
+
+  // Make the flap speed pulse over time for a more dynamic look.
+  useFrame(({ clock }) => {
+    flapSpeed.value =
+      BASE_FLAP_SPEED + 2 * Math.sin(clock.getElapsedTime() * 2);
+  });
 
   return (
     <group ref={groupRef} {...props}>
