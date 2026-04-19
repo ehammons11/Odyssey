@@ -1,7 +1,7 @@
 import { type ThreeElements, useFrame } from "@react-three/fiber";
 import { type Signal } from "@preact/signals-react";
 import { ShaderMaterial, TextureLoader, Uniform, DoubleSide } from "three";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 import vertexShader from "@/shaders/butterfly/vertex.glsl?raw";
 import fragmentShader from "@/shaders/butterfly/fragment.glsl?raw";
@@ -28,7 +28,7 @@ export function ButterflyWing({ flapSpeed, ...props }: ButterflyWingProps) {
         vertexShader,
         fragmentShader,
         uniforms: {
-          uTime: new Uniform(0),
+          uPhase: new Uniform(0),
           uFlapSpeed: new Uniform(flapSpeed.peek()),
           uWingTexture: new Uniform(wingTexture),
           uJewelGradient: new Uniform(jewelGradient),
@@ -39,8 +39,11 @@ export function ButterflyWing({ flapSpeed, ...props }: ButterflyWingProps) {
     [flapSpeed],
   );
 
+  const phaseRef = useRef(0);
+
   useFrame((_, delta) => {
-    material.uniforms.uTime.value += delta;
+    phaseRef.current += delta * flapSpeed.value;
+    material.uniforms.uPhase.value = phaseRef.current;
     material.uniforms.uFlapSpeed.value = flapSpeed.value;
   });
 
