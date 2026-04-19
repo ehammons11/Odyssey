@@ -19,7 +19,7 @@
     "@react-three/fiber": "^9.5.0",
     "@react-three/uikit": "^1.0.61",
     "@react-three/xr": "^6.6.29",
-    "@sparkjsdev/spark": "^0.1.10",
+    "@sparkjsdev/spark": "^2.0.0",
     "deepsignal": "^1.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
