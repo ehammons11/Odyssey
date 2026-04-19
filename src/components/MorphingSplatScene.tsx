@@ -188,7 +188,7 @@ export function MorphingSplatScene({
         // Skip environments with no splat (e.g. a default environment).
         if (!url) continue;
 
-        const mesh = new SplatMesh({ url });
+        const mesh = new SplatMesh({ url, lod: true });
         await mesh.initialized;
         if (disposed) return;
 

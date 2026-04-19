@@ -2,7 +2,7 @@ varying vec2 vUv;
 varying vec3 vPosition;
 varying vec3 vNormal;
 
-uniform float uTime;
+uniform float uPhase;
 uniform float uFlapSpeed;
 
 void main()
@@ -13,7 +13,7 @@ void main()
     float phaseLag = (1.0 - uv.y) * 0.4 * clamp(uFlapSpeed / 6.0, 0.0, 1.0);
 
     // Oscillating flap angle with per-vertex phase offset.
-    float angle = sin(uTime * uFlapSpeed - phaseLag) * 0.6;
+    float angle = sin(uPhase - phaseLag) * 0.6;
 
     // Fold both halves around the center hinge (x = 0).
     vec3 pos = position;
