@@ -54,7 +54,7 @@ const concreteWallMaterial = new MeshStandardMaterial({
 });
 
 /**
- * Dome component that loads the futuristic space dome GLTF model and renders it in the scene.
+ * Renders a large concrete dome.
  */
 export function Dome(props: ThreeElements["group"]) {
   return (
