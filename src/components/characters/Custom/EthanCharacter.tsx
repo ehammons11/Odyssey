@@ -1,6 +1,6 @@
 import { type ThreeElements, useFrame } from "@react-three/fiber";
 import { Float } from "@react-three/drei";
-import { use, useRef } from "react";
+import { useRef } from "react";
 import {
   DoubleSide,
   type Group,

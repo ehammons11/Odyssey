@@ -21,10 +21,6 @@ function SceneContent() {
         <EnvironmentLoader environments={ethanEnvironments} />
         <EthanCharacter position={[0, 1, -0.3]} scale={0.2} />
         <Dome position={[0, 0, 0]} scale={1} />
-        {/* <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[400, 400]} />
-          <meshStandardMaterial color="green" />
-        </mesh> */}
       </>
     );
   }
