@@ -29,7 +29,13 @@ function SceneContent() {
 }
 
 function App() {
-  const store = createXRStore({ foveation: 0, offerSession: false });
+  const store = createXRStore({
+    foveation: 1,
+    frameRate: "high",
+    frameBufferScaling: 0.85,
+    meshDetection: false,
+    planeDetection: false,
+  });
 
   return (
     <ConversationProvider>

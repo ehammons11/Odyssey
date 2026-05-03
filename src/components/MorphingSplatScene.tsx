@@ -13,7 +13,7 @@ interface MorphingSplatSceneProps {
   urls: (string | undefined)[];
   /** Optional per-environment positions for the splat meshes. */
   positions?: ([number, number, number] | undefined)[];
-  /** Duration of the morph transition in seconds. Defaults to 3. */
+  /** Duration of the morph transition in seconds. Defaults to 7.5. */
   transitionDuration?: number;
   /** Radius of the random scatter during the morph. Defaults to 2. */
   randomRadius?: number;
@@ -139,6 +139,9 @@ function createMorphModifier(
   );
 }
 
+// Audio for splat transitions.
+const whooshAudio = new Audio("/audio/whoosh.wav");
+
 /**
  * Loads all gaussian splat meshes up-front and renders the active one.
  * When the environment store's active index changes, a scatter-morph
@@ -147,7 +150,7 @@ function createMorphModifier(
 export function MorphingSplatScene({
   urls,
   positions,
-  transitionDuration = 3.0,
+  transitionDuration = 7.5,
   randomRadius = 5.0,
 }: MorphingSplatSceneProps) {
   const { gl, scene } = useThree();
@@ -175,7 +178,15 @@ export function MorphingSplatScene({
   // Load all splat meshes and wire up morph modifiers.
   useEffect(() => {
     let disposed = false;
-    const spark = new SparkRenderer({ renderer: gl });
+    const spark = new SparkRenderer({
+      renderer: gl,
+      enableLod: true,
+      // coneFov0: 70,
+      // coneFov: 110,
+      // coneFoveate: 0.4,
+      // behindFoveate: 0.1,
+      // lodRenderScale: 2.5,
+    });
     scene.add(spark);
 
     const meshes: SplatMesh[] = [];
@@ -247,6 +258,9 @@ export function MorphingSplatScene({
       fromIndexRef.current!.value = state.displayedIndex;
       toIndexRef.current!.value = targetIndex;
       progressRef.current!.value = 0;
+
+      whooshAudio.currentTime = 0;
+      whooshAudio.play();
     }
 
     // Advance the animation.
