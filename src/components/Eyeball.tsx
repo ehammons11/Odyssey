@@ -49,4 +49,4 @@ export function Eyeball(props: ThreeElements["group"]) {
   );
 }
 
-useGLTF.preload("/eyeball.glb");
+useGLTF.preload("/human_eye.glb");

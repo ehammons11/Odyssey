@@ -1,8 +1,8 @@
 import { SplatMesh, SparkRenderer, dyno } from "@sparkjsdev/spark";
 import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
-import { Vector3 } from "three";
 import { environmentStore } from "../stores/environmentStore";
+import { AudioSource, type AudioSourceHandle } from "./audio/AudioSource";
 
 interface MorphingSplatSceneProps {
   /**
@@ -18,8 +18,6 @@ interface MorphingSplatSceneProps {
   /** Radius of the random scatter during the morph. Defaults to 2. */
   randomRadius?: number;
 }
-
-const WORLD_POSITION = new Vector3(0, 1, 0);
 
 /**
  * Creates a Dyno node that implements the scatter-morph shader.
@@ -139,9 +137,6 @@ function createMorphModifier(
   );
 }
 
-// Audio for splat transitions.
-const whooshAudio = new Audio("/audio/whoosh.wav");
-
 /**
  * Loads all gaussian splat meshes up-front and renders the active one.
  * When the environment store's active index changes, a scatter-morph
@@ -154,6 +149,7 @@ export function MorphingSplatScene({
   randomRadius = 5.0,
 }: MorphingSplatSceneProps) {
   const { gl, scene } = useThree();
+  const whooshSound = useRef<AudioSourceHandle>(null);
 
   // Shared dyno uniforms — created once, mutated each frame.
   const fromIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
@@ -223,10 +219,6 @@ export function MorphingSplatScene({
       }
 
       meshesRef.current = meshes;
-
-      if (!disposed) {
-        spark.renderEnvMap({ scene, worldCenter: WORLD_POSITION });
-      }
     }
 
     loadAll();
@@ -259,8 +251,7 @@ export function MorphingSplatScene({
       toIndexRef.current!.value = targetIndex;
       progressRef.current!.value = 0;
 
-      whooshAudio.currentTime = 0;
-      whooshAudio.play();
+      whooshSound.current?.play();
     }
 
     // Advance the animation.
@@ -290,5 +281,7 @@ export function MorphingSplatScene({
     }
   });
 
-  return null;
+  return (
+    <AudioSource ref={whooshSound} url="/audio/whoosh.wav" autoplay={false} />
+  );
 }

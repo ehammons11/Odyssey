@@ -2,9 +2,13 @@ import { Container, Text } from "@react-three/uikit";
 import { useSignal } from "@preact/signals-react";
 import { useSpringValue } from "@react-spring/three";
 import { useFrame } from "@react-three/fiber";
+import { useRef } from "react";
 import { Title } from "./Title";
 import { sceneStore } from "@/stores/sceneStore";
-import { playSound } from "@/utils/playSound";
+import {
+  AudioSource,
+  type AudioSourceHandle,
+} from "@/components/audio/AudioSource";
 
 const HOVER_OPACITY = 1;
 const DEFAULT_OPACITY = 0.6;
@@ -27,6 +31,7 @@ export function StartScene() {
 function StartButton() {
   const buttonOpacity = useSignal(DEFAULT_OPACITY);
   const buttonOpacitySpring = useSpringValue(DEFAULT_OPACITY);
+  const buttonSound = useRef<AudioSourceHandle>(null);
 
   useFrame(() => {
     buttonOpacity.value = buttonOpacitySpring.get();
@@ -34,6 +39,7 @@ function StartButton() {
 
   return (
     <group position={[0, 0.6, -10]}>
+      <AudioSource ref={buttonSound} url="/audio/button.wav" autoplay={false} />
       <Container
         backgroundColor="lightgray"
         opacity={buttonOpacity}
@@ -41,11 +47,13 @@ function StartButton() {
         height={50}
         justifyContent="center"
         borderRadius={10}
+        borderWidth={2}
+        borderColor="black"
         onHoverChange={(hover: boolean) => {
           buttonOpacitySpring.start(hover ? HOVER_OPACITY : DEFAULT_OPACITY);
         }}
         onClick={() => {
-          playSound("/audio/button.wav");
+          buttonSound.current?.play();
           sceneStore.startOdyssey();
         }}
       >
