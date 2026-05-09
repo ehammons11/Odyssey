@@ -162,7 +162,7 @@ export function MorphingSplatScene({
   if (!progressRef.current) progressRef.current = dyno.dynoFloat(1.0);
   if (!radiusRef.current) radiusRef.current = dyno.dynoFloat(randomRadius);
 
-  const meshesRef = useRef<SplatMesh[]>([]);
+  const meshesRef = useRef<Map<number, SplatMesh>>(new Map());
 
   /** Internal animation state (not reactive — driven by useFrame). */
   const transitionState = useRef({
@@ -176,16 +176,12 @@ export function MorphingSplatScene({
     let disposed = false;
     const spark = new SparkRenderer({
       renderer: gl,
+      maxStdDev: Math.sqrt(5),
       enableLod: true,
-      // coneFov0: 70,
-      // coneFov: 110,
-      // coneFoveate: 0.4,
-      // behindFoveate: 0.1,
-      // lodRenderScale: 2.5,
     });
     scene.add(spark);
 
-    const meshes: SplatMesh[] = [];
+    const meshes = new Map<number, SplatMesh>();
 
     async function loadAll() {
       for (let i = 0; i < urls.length; i++) {
@@ -214,8 +210,11 @@ export function MorphingSplatScene({
         );
         mesh.updateGenerator();
 
+        // Only the initially-displayed environment should be visible.
+        mesh.visible = i === transitionState.current.displayedIndex;
+
         scene.add(mesh);
-        meshes.push(mesh);
+        meshes.set(i, mesh);
       }
 
       meshesRef.current = meshes;
@@ -227,9 +226,8 @@ export function MorphingSplatScene({
       disposed = true;
       meshes.forEach((m) => scene.remove(m));
       scene.remove(spark);
-      meshesRef.current = [];
+      meshesRef.current = new Map();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, scene, urls, positions]);
 
   // Drive the morph animation each frame.
@@ -251,6 +249,13 @@ export function MorphingSplatScene({
       toIndexRef.current!.value = targetIndex;
       progressRef.current!.value = 0;
 
+      // Make both participating meshes visible for the transition.
+      const meshes = meshesRef.current;
+      const fromMesh = meshes.get(state.displayedIndex);
+      const toMesh = meshes.get(targetIndex);
+      if (fromMesh) fromMesh.visible = true;
+      if (toMesh) toMesh.visible = true;
+
       whooshSound.current?.play();
     }
 
@@ -262,14 +267,21 @@ export function MorphingSplatScene({
       );
       progressRef.current!.value = state.progress;
 
-      // Push uniform changes so the GPU picks them up.
-      for (const m of meshesRef.current) {
-        m.updateVersion();
-      }
+      // Push uniform changes only on participating meshes.
+      const meshes = meshesRef.current;
+      meshes.get(fromIndexRef.current!.value)?.updateVersion();
+      meshes.get(toIndexRef.current!.value)?.updateVersion();
 
       // Transition complete — snap to static display of the target.
       if (state.progress >= 1.0) {
         state.animating = false;
+
+        // Hide the outgoing mesh, keep only the target visible.
+        const fromMesh = meshes.get(state.displayedIndex);
+        if (fromMesh && state.displayedIndex !== targetIndex) {
+          fromMesh.visible = false;
+        }
+
         state.displayedIndex = targetIndex;
 
         fromIndexRef.current!.value = targetIndex;
