@@ -54,6 +54,8 @@ function App() {
   return (
     <ConversationProvider>
       <Canvas
+        dpr={[1, 2]}
+        gl={{ antialias: true, alpha: false }}
         camera={{ position: [0, 1, 0], rotation: [0, 0, 0], fov: 60 }}
         style={{
           position: "fixed",
