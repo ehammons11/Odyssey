@@ -137,6 +137,9 @@ function createMorphModifier(
   );
 }
 
+const LOD_RECOVERY_DURATION = 0.5; // seconds.
+const TRANSITION_LOD_SCALE = 0.01; // LOD scale during transition (lower = more aggressive LOD, smoother animation, but more blurring).
+
 /**
  * Loads all gaussian splat meshes up-front and renders the active one.
  * When the environment store's active index changes, a scatter-morph
@@ -149,26 +152,33 @@ export function MorphingSplatScene({
   randomRadius = 5.0,
 }: MorphingSplatSceneProps) {
   const { gl, scene } = useThree();
-  const whooshSound = useRef<AudioSourceHandle>(null);
+  const longWhooshSound = useRef<AudioSourceHandle>(null);
+  const shortWhooshSound = useRef<AudioSourceHandle>(null);
 
   // Shared dyno uniforms — created once, mutated each frame.
   const fromIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
-  const toIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
-  const progressRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
-  const radiusRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
+  if (fromIndexRef.current === null) fromIndexRef.current = dyno.dynoInt(0);
 
-  if (!fromIndexRef.current) fromIndexRef.current = dyno.dynoInt(0);
-  if (!toIndexRef.current) toIndexRef.current = dyno.dynoInt(0);
-  if (!progressRef.current) progressRef.current = dyno.dynoFloat(1.0);
-  if (!radiusRef.current) radiusRef.current = dyno.dynoFloat(randomRadius);
+  const toIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
+  if (toIndexRef.current === null) toIndexRef.current = dyno.dynoInt(0);
+
+  const progressRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
+  if (progressRef.current === null) progressRef.current = dyno.dynoFloat(1.0);
+
+  const radiusRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
+  if (radiusRef.current === null)
+    radiusRef.current = dyno.dynoFloat(randomRadius);
 
   const meshesRef = useRef<Map<number, SplatMesh>>(new Map());
+  const sparkRef = useRef<SparkRenderer | null>(null);
 
-  /** Internal animation state (not reactive — driven by useFrame). */
+  /** Internal animation state (not reactive, driven by useFrame). */
   const transitionState = useRef({
     displayedIndex: 0,
-    progress: 1.0,
+    morphAnimationProgress: 1.0,
     animating: false,
+    lodRecoveryProgress: 1.0,
+    recoveringLod: false,
   });
 
   // Load all splat meshes and wire up morph modifiers.
@@ -179,6 +189,7 @@ export function MorphingSplatScene({
       maxStdDev: Math.sqrt(5),
       enableLod: true,
     });
+    sparkRef.current = spark;
     scene.add(spark);
 
     const meshes = new Map<number, SplatMesh>();
@@ -226,6 +237,7 @@ export function MorphingSplatScene({
       disposed = true;
       meshes.forEach((m) => scene.remove(m));
       scene.remove(spark);
+      sparkRef.current = null;
       meshesRef.current = new Map();
     };
   }, [gl, scene, urls, positions]);
@@ -243,44 +255,64 @@ export function MorphingSplatScene({
       targetIndex !== state.displayedIndex
     ) {
       state.animating = true;
-      state.progress = 0;
+      state.morphAnimationProgress = 0;
 
       fromIndexRef.current!.value = state.displayedIndex;
       toIndexRef.current!.value = targetIndex;
       progressRef.current!.value = 0;
 
+      // Drop LOD detail during transition for smooth animation.
+      if (sparkRef.current)
+        sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
+
       // Make both participating meshes visible for the transition.
       const meshes = meshesRef.current;
       const fromMesh = meshes.get(state.displayedIndex);
       const toMesh = meshes.get(targetIndex);
-      if (fromMesh) fromMesh.visible = true;
-      if (toMesh) toMesh.visible = true;
+      if (fromMesh) {
+        // Normal transition: only "from" is visible during the first half.
+        fromMesh.visible = true;
+        if (toMesh) toMesh.visible = false;
 
-      whooshSound.current?.play();
+        // Long sound for full transition.
+        longWhooshSound.current?.play();
+      } else {
+        // No outgoing splat (e.g. initial environment) — show "to" immediately.
+        state.morphAnimationProgress = 0.5;
+        if (toMesh) toMesh.visible = true;
+
+        // Short sound for single-splat transition.
+        shortWhooshSound.current?.play();
+      }
     }
 
-    // Advance the animation.
+    // Advance the morph animation.
     if (state.animating) {
-      state.progress = Math.min(
-        state.progress + delta / transitionDuration,
+      state.morphAnimationProgress = Math.min(
+        state.morphAnimationProgress + delta / transitionDuration,
         1.0,
       );
-      progressRef.current!.value = state.progress;
+      progressRef.current!.value = state.morphAnimationProgress;
 
-      // Push uniform changes only on participating meshes.
       const meshes = meshesRef.current;
-      meshes.get(fromIndexRef.current!.value)?.updateVersion();
-      meshes.get(toIndexRef.current!.value)?.updateVersion();
+      const fromMesh = meshes.get(state.displayedIndex);
+      const toMesh = meshes.get(targetIndex);
 
-      // Transition complete — snap to static display of the target.
-      if (state.progress >= 1.0) {
+      // At the midpoint, swap visibility: hide "from", show "to".
+      // This ensures only one splat mesh is rendered at any time.
+      if (state.morphAnimationProgress >= 0.5) {
+        if (fromMesh) fromMesh.visible = false;
+        if (toMesh) toMesh.visible = true;
+        toMesh?.updateVersion();
+      } else {
+        fromMesh?.updateVersion();
+      }
+
+      // Transition complete — begin LOD recovery ramp.
+      if (state.morphAnimationProgress >= 1.0) {
         state.animating = false;
-
-        // Hide the outgoing mesh, keep only the target visible.
-        const fromMesh = meshes.get(state.displayedIndex);
-        if (fromMesh && state.displayedIndex !== targetIndex) {
-          fromMesh.visible = false;
-        }
+        state.recoveringLod = true;
+        state.lodRecoveryProgress = 0;
 
         state.displayedIndex = targetIndex;
 
@@ -291,9 +323,40 @@ export function MorphingSplatScene({
         environmentStore.completeTransition();
       }
     }
+
+    // Smoothly ramp LOD detail back up after the morph animation.
+    if (state.recoveringLod) {
+      state.lodRecoveryProgress = Math.min(
+        state.lodRecoveryProgress + delta / LOD_RECOVERY_DURATION,
+        1.0,
+      );
+      const t =
+        state.lodRecoveryProgress *
+        state.lodRecoveryProgress *
+        (3 - 2 * state.lodRecoveryProgress); // smoothstep.
+      if (sparkRef.current) {
+        sparkRef.current.lodSplatScale =
+          TRANSITION_LOD_SCALE + (1.0 - TRANSITION_LOD_SCALE) * t;
+      }
+      if (state.lodRecoveryProgress >= 1.0) {
+        state.recoveringLod = false;
+        if (sparkRef.current) sparkRef.current.lodSplatScale = 1.0;
+      }
+    }
   });
 
   return (
-    <AudioSource ref={whooshSound} url="/audio/whoosh.wav" autoplay={false} />
+    <>
+      <AudioSource
+        ref={longWhooshSound}
+        url="/audio/whoosh.wav"
+        autoplay={false}
+      />
+      <AudioSource
+        ref={shortWhooshSound}
+        url="/audio/whooshShort.wav"
+        autoplay={false}
+      />
+    </>
   );
 }
