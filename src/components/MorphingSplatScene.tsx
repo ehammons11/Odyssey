@@ -152,17 +152,22 @@ export function MorphingSplatScene({
   randomRadius = 5.0,
 }: MorphingSplatSceneProps) {
   const { gl, scene } = useThree();
-  const whooshSound = useRef<AudioSourceHandle>(null);
+  const longWhooshSound = useRef<AudioSourceHandle>(null);
+  const shortWhooshSound = useRef<AudioSourceHandle>(null);
 
   // Shared dyno uniforms — created once, mutated each frame.
-  const fromIndexRef = useRef<ReturnType<typeof dyno.dynoInt>>(dyno.dynoInt(0));
-  const toIndexRef = useRef<ReturnType<typeof dyno.dynoInt>>(dyno.dynoInt(0));
-  const progressRef = useRef<ReturnType<typeof dyno.dynoFloat>>(
-    dyno.dynoFloat(1.0),
-  );
-  const radiusRef = useRef<ReturnType<typeof dyno.dynoFloat>>(
-    dyno.dynoFloat(randomRadius),
-  );
+  const fromIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
+  if (fromIndexRef.current === null) fromIndexRef.current = dyno.dynoInt(0);
+
+  const toIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
+  if (toIndexRef.current === null) toIndexRef.current = dyno.dynoInt(0);
+
+  const progressRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
+  if (progressRef.current === null) progressRef.current = dyno.dynoFloat(1.0);
+
+  const radiusRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
+  if (radiusRef.current === null)
+    radiusRef.current = dyno.dynoFloat(randomRadius);
 
   const meshesRef = useRef<Map<number, SplatMesh>>(new Map());
   const sparkRef = useRef<SparkRenderer | null>(null);
@@ -252,12 +257,13 @@ export function MorphingSplatScene({
       state.animating = true;
       state.morphAnimationProgress = 0;
 
-      fromIndexRef.current.value = state.displayedIndex;
-      toIndexRef.current.value = targetIndex;
-      progressRef.current.value = 0;
+      fromIndexRef.current!.value = state.displayedIndex;
+      toIndexRef.current!.value = targetIndex;
+      progressRef.current!.value = 0;
 
       // Drop LOD detail during transition for smooth animation.
-      if (sparkRef.current) sparkRef.current.lodSplatScale = 0.01;
+      if (sparkRef.current)
+        sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
 
       // Make both participating meshes visible for the transition.
       const meshes = meshesRef.current;
@@ -267,12 +273,17 @@ export function MorphingSplatScene({
         // Normal transition: only "from" is visible during the first half.
         fromMesh.visible = true;
         if (toMesh) toMesh.visible = false;
+
+        // Long sound for full transition.
+        longWhooshSound.current?.play();
       } else {
         // No outgoing splat (e.g. initial environment) — show "to" immediately.
+        state.morphAnimationProgress = 0.5;
         if (toMesh) toMesh.visible = true;
-      }
 
-      whooshSound.current?.play();
+        // Short sound for single-splat transition.
+        shortWhooshSound.current?.play();
+      }
     }
 
     // Advance the morph animation.
@@ -281,7 +292,7 @@ export function MorphingSplatScene({
         state.morphAnimationProgress + delta / transitionDuration,
         1.0,
       );
-      progressRef.current.value = state.morphAnimationProgress;
+      progressRef.current!.value = state.morphAnimationProgress;
 
       const meshes = meshesRef.current;
       const fromMesh = meshes.get(state.displayedIndex);
@@ -289,8 +300,7 @@ export function MorphingSplatScene({
 
       // At the midpoint, swap visibility: hide "from", show "to".
       // This ensures only one splat mesh is rendered at any time.
-      // If there's no "from" mesh, "to" is already visible from the start.
-      if (state.morphAnimationProgress >= 0.5 || !fromMesh) {
+      if (state.morphAnimationProgress >= 0.5) {
         if (fromMesh) fromMesh.visible = false;
         if (toMesh) toMesh.visible = true;
         toMesh?.updateVersion();
@@ -306,9 +316,9 @@ export function MorphingSplatScene({
 
         state.displayedIndex = targetIndex;
 
-        fromIndexRef.current.value = targetIndex;
-        toIndexRef.current.value = targetIndex;
-        progressRef.current.value = 1.0;
+        fromIndexRef.current!.value = targetIndex;
+        toIndexRef.current!.value = targetIndex;
+        progressRef.current!.value = 1.0;
 
         environmentStore.completeTransition();
       }
@@ -336,6 +346,17 @@ export function MorphingSplatScene({
   });
 
   return (
-    <AudioSource ref={whooshSound} url="/audio/whoosh.wav" autoplay={false} />
+    <>
+      <AudioSource
+        ref={longWhooshSound}
+        url="/audio/whoosh.wav"
+        autoplay={false}
+      />
+      <AudioSource
+        ref={shortWhooshSound}
+        url="/audio/whooshShort.wav"
+        autoplay={false}
+      />
+    </>
   );
 }
