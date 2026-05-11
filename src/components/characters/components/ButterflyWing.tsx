@@ -109,14 +109,24 @@ export function ButterflyWing({ flapSpeed, ...props }: ButterflyWingProps) {
 
     material.uniforms.uWingArch.value = currentWingArch.current;
     (material.uniforms.uColorBias.value as Vector3).set(
-      currentColorBiasR.current,
-      currentColorBiasG.current,
-      currentColorBiasB.current,
+      MathUtils.clamp(currentColorBiasR.current, 0, 1),
+      MathUtils.clamp(currentColorBiasG.current, 0, 1),
+      MathUtils.clamp(currentColorBiasB.current, 0, 1),
     );
-    material.uniforms.uColorBiasStrength.value =
-      currentColorBiasStrength.current;
-    material.uniforms.uGradientZoom.value = currentGradientZoom.current;
-    material.uniforms.uGradientOffset.value = currentGradientOffset.current;
+    material.uniforms.uColorBiasStrength.value = MathUtils.clamp(
+      currentColorBiasStrength.current,
+      0,
+      1,
+    );
+    material.uniforms.uGradientZoom.value = Math.max(
+      0,
+      currentGradientZoom.current,
+    );
+    material.uniforms.uGradientOffset.value = MathUtils.clamp(
+      currentGradientOffset.current,
+      0,
+      1,
+    );
   });
 
   return (
