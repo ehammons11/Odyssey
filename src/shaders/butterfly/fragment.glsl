@@ -5,6 +5,10 @@ varying vec3 vNormal;
 uniform sampler2D uWingTexture;
 uniform sampler2D uJewelGradient;
 uniform sampler2D uJewelNoise;
+uniform vec3 uColorBias;
+uniform float uColorBiasStrength;
+uniform float uGradientZoom;
+uniform float uGradientOffset;
 
 void main()
 {
@@ -24,7 +28,13 @@ void main()
     vec3 jewelNoise = texture2D(uJewelNoise, vUv).rgb;
     vec3 viewDirection = normalize(vPosition - cameraPosition);
     float viewAngle = mod((dot(viewDirection, normalize(normal + jewelNoise)) + 1.0) * 4.0, 1.0);
-    vec3 jewelColor = texture2D(uJewelGradient, vec2(viewAngle, 0.0)).rgb;
+
+    // Apply gradient zoom and offset.
+    float zoomedAngle = clamp(uGradientOffset + viewAngle * uGradientZoom, 0.0, 1.0);
+    vec3 jewelColor = texture2D(uJewelGradient, vec2(zoomedAngle, 0.0)).rgb;
+
+    // Blend toward the color bias.
+    jewelColor = mix(jewelColor, uColorBias, uColorBiasStrength);
 
     // Black pixels stay black, white pixels get jewel coloring.
     vec3 color = mix(vec3(0.0), jewelColor, brightness);
