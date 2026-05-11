@@ -10,6 +10,7 @@ import { useFrame } from "@react-three/fiber";
 import { useXRStore } from "@react-three/xr";
 import { useConversationContext } from "../hooks/useConversationContext";
 import { environmentStore } from "../stores/environmentStore";
+import { EmotionPanel } from "./EmotionPanel";
 
 const HOVER_OPACITY = 1;
 const DEFAULT_OPACITY = 0.5;
@@ -20,9 +21,9 @@ const DEFAULT_OPACITY = 0.5;
 export function UI(props: ContainerProperties) {
   return (
     <Fullscreen pointerEvents="listener" renderOrder={2}>
-      <Container flexDirection="column" flexGrow={3}>
+      <Container flexDirection="column" width="100%" justifyContent="flex-end">
+        <EmotionPanel marginRight="auto" marginTop="auto" />
         <Container
-          flexGrow={3}
           alignItems="center"
           justifyContent="center"
           flexDirection="row"
