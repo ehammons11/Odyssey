@@ -175,7 +175,7 @@ function CharacterEye(props: ThreeElements["group"]) {
     // Update frantic jitter targets periodically.
     jitterTimer.current -= delta;
     if (jitterTimer.current <= 0) {
-      const frantic = currentEyeFrantic.current;
+      const frantic = MathUtils.clamp(currentEyeFrantic.current, 0, 1);
       jitterYaw.current = (Math.random() - 0.5) * 2 * frantic * 0.6;
       jitterPitch.current = (Math.random() - 0.5) * 2 * frantic * 0.3;
       // More frantic = more frequent jitter changes.
@@ -224,7 +224,7 @@ function CharacterEye(props: ThreeElements["group"]) {
       if (blinkProgress.current >= BLINK_DURATION) {
         // Blink finished — start cooldown for next one.
         blinkProgress.current = -1;
-        blinkCooldown.current = currentBlinkRate.current;
+        blinkCooldown.current = Math.max(0.1, currentBlinkRate.current);
       } else {
         blinkClosed = Math.sin(
           (blinkProgress.current / BLINK_DURATION) * Math.PI,
