@@ -6,7 +6,9 @@ import {
   type ReactNode,
 } from "react";
 import { useConversation } from "@elevenlabs/react";
-import { environmentStore } from "../stores/environmentStore";
+import { createEmotionParser } from "@/utils/emotionParser";
+import { animationStore } from "@/stores/animationStore";
+import { environmentStore } from "@/stores/environmentStore";
 
 interface ConversationContextType {
   conversation: ReturnType<typeof useConversation>;
@@ -35,6 +37,11 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     null,
   );
   const observerRef = useRef<MutationObserver | null>(null);
+  const emotionParserRef = useRef(
+    createEmotionParser((preset) => {
+      animationStore.setEmotion(preset);
+    }),
+  );
 
   const disconnectObserver = useCallback(() => {
     observerRef.current?.disconnect();
@@ -90,11 +97,19 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       console.log("Disconnected from conversation");
       disconnectObserver();
       setAgentMediaStream(null);
+      emotionParserRef.current.reset();
     },
     onError: (error: string) => {
       console.error("Conversation error:", error);
       disconnectObserver();
       setAgentMediaStream(null);
+      emotionParserRef.current.reset();
+    },
+    onMessage: ({ role }) => {
+      if (role === "agent") {
+        // Prevent partial tag state from carrying into the next streamed turn.
+        emotionParserRef.current.reset();
+      }
     },
   });
 
@@ -112,12 +127,23 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           environmentStore.next();
         },
       },
+      onAgentChatResponsePart: ({ text, type }) => {
+        if (type === "start") {
+          emotionParserRef.current.reset();
+          return;
+        }
+
+        if (type === "delta") {
+          emotionParserRef.current.feed(text);
+        }
+      },
     });
   };
 
   const endSession = () => {
     disconnectObserver();
     setAgentMediaStream(null);
+    emotionParserRef.current.reset();
     conversation.endSession();
   };
 
