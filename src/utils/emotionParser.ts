@@ -35,6 +35,7 @@ export function createEmotionParser(onEmotion: EmotionCallback) {
           if (preset) {
             onEmotion(preset, rawTag);
           }
+          // Unknown tags are intentionally ignored.
 
           continue;
         }

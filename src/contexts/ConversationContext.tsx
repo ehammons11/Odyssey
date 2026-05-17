@@ -107,6 +107,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     },
     onMessage: ({ role }) => {
       if (role === "agent") {
+        // Prevent partial tag state from carrying into the next streamed turn.
         emotionParserRef.current.reset();
       }
     },
