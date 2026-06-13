@@ -104,7 +104,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
     startObserver();
 
     conversation.startSession({
-      agentId: "REDACTED_AGENT_ID",
+      agentId: import.meta.env.VITE_ELEVENLABS_AGENT_ID,
       connectionType: "webrtc",
       clientTools: {
         changeEnvironment: async () => {
