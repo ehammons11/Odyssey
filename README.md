@@ -42,6 +42,8 @@ Guided Journey
 
 **Gaussian splat rendering in VR**: Web-based tooling for Gaussian splat rendering has improved rapidly. I render with Spark, World Labs' open-source THREE.js splat renderer. World Labs builds both sides of this stack: Spark for rendering and Marble for generating the environments themselves. After I storyboard and generate the worlds I put them into an environments.ts file which serves as a template for world-rendering sequence. I take advantage of Spark's Lod system to ensure the splat rendering performance works well in VR. The VR stack itself is powered by React Three Fiber and React Three XR.
 
+Here's an example of a [splat transition](https://youtu.be/PkUmYTC9haQ) and a preview of the [emotion system](https://youtu.be/HI1s7uaGDd0).
+
 ### Current Status 
 
 The project is still an active work-in-progress. Some future next steps include:
