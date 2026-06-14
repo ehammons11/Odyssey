@@ -5,7 +5,7 @@
 
 ### Background
 
-Odyssey is a project at the intersection of AI, VR, virtual worlds, and the human experience. Participants enter a journey guided by Omni, their winged AI companion. Omni navigates them through a set of virtual environments strung together to maximize symbolic significance for the participant's life story. The result ideally leaving them with greater self-understanding and a more grounded optimism about building a meaningful life.
+Odyssey is a project at the intersection of AI, VR, virtual worlds, and the human experience. Participants enter a journey guided by Omni, their winged AI companion. Omni navigates them through a set of virtual environments strung together to maximize symbolic significance for the participant's life story. The result ideally leaves them with greater self-understanding and a more grounded optimism about building a meaningful life.
 
 Odyssey was heavily inspired by the work done by [OdysseyWorks](https://www.odysseyworks.org/). They craft large-scale personalized experiences interwoven into real life for their participants. They might be walking down the street and hear a violin playing their favorite song coming through a window. While their Odyssey is occurring, the lines blur between life and art. 
 
@@ -40,7 +40,7 @@ Guided Journey
 
 **Real-time agent grounded in the scene state**: Omni is powered by the Elevenlabs conversational agents API. I designed their system prompt and agent workflow through Elevenlabs's platform to give the agent context on each environment it's in. The emitted audio from the agent is spatial to maximize the immersion. Additionally, I am working on real-time emotional expressions for agent by decoding the emotion tags ElevenLabs provides and piping them into the GLSL shader uniforms of Omni's body. 
 
-**Gaussian splat rendering in VR**: The web-based tooling for gaussian splat rendering has been rapidly improving (Spark.js). This trend is concurrent with new AI-generated gaussian splat tools developed by WorldLabs. After I storyboard and generate the worlds I put them into an environments.ts file which serves as a template for the sequence in which the worlds should render. I take advantage of Spark's Lod system to ensure the splat rendering performance works well in VR. The VR itself is powered by React Three Fiber and React Three XR.
+**Gaussian splat rendering in VR**: Web-based tooling for Gaussian splat rendering has improved rapidly. I render with Spark, World Labs' open-source THREE.js splat renderer. World Labs builds both sides of this stack: Spark for rendering and Marble for generating the environments themselves. After I storyboard and generate the worlds I put them into an environments.ts file which serves as a template for world-rendering sequence. I take advantage of Spark's Lod system to ensure the splat rendering performance works well in VR. The VR stack itself is powered by React Three Fiber and React Three XR.
 
 ### Current Status 
 
@@ -49,7 +49,7 @@ The project is still an active work-in-progress. Some future next steps include:
 1. Finalize the real-time emotion system.
 2. Design a custom dome mesh for the Odyssey Chamber.
 3. Design the ending scene (secret for now).
-4. More complex scenes (meshes with physics)
+4. More complex scenes (meshes with physics).
 
 
 
