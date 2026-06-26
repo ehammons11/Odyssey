@@ -1,4 +1,9 @@
-import { SplatMesh, SparkRenderer, dyno } from "@sparkjsdev/spark";
+import {
+  SplatMesh,
+  SparkRenderer,
+  PackedSplats,
+  dyno,
+} from "@sparkjsdev/spark";
 import { useEffect, useRef } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import { environmentStore } from "../stores/environmentStore";
@@ -13,175 +18,140 @@ interface MorphingSplatSceneProps {
   urls: (string | undefined)[];
   /** Optional per-environment positions for the splat meshes. */
   positions?: ([number, number, number] | undefined)[];
-  /** Duration of the morph transition in seconds. Defaults to 7.5. */
+  /** Duration of the transition in seconds. Defaults to 1.5. */
   transitionDuration?: number;
-  /** Radius of the random scatter during the morph. Defaults to 2. */
-  randomRadius?: number;
 }
 
 /**
- * Creates a Dyno node that implements the scatter-morph shader.
- *
- * Inputs:
- *  - gsplat: the current gaussian splat
- *  - fromIndex / toIndex: which objects are transitioning
- *  - progress: 0 → 1 animation parameter (0 = fully showing "from", 1 = fully showing "to")
- *  - objectIndex: which object this mesh represents
- *  - randomRadius: scatter radius
- *
- * First half (progress 0–0.5): "from" splats scatter outward and fade.
- * Second half (progress 0.5–1): "to" splats coalesce inward and appear.
- * Non-participating objects are invisible.
+ * GLSL slerp for quaternion interpolation (matches spark's built-in slerp).
+ * ponytail: spark defines slerp in its shader globals, but we keep a local
+ * copy to avoid depending on compilation order.
  */
-function createMorphDyno() {
+const SLERP_GLSL = `
+vec4 morphSlerp(vec4 q1, vec4 q2, float t) {
+  float cosHalfTheta = dot(q1, q2);
+  if (abs(cosHalfTheta) >= 0.999) return q1;
+  if (cosHalfTheta < 0.0) { q2 = -q2; cosHalfTheta = -cosHalfTheta; }
+  float halfTheta = acos(cosHalfTheta);
+  float sinHalfTheta = sqrt(1.0 - cosHalfTheta * cosHalfTheta);
+  float ratioA = sin((1.0 - t) * halfTheta) / sinHalfTheta;
+  float ratioB = sin(t * halfTheta) / sinHalfTheta;
+  return q1 * ratioA + q2 * ratioB;
+}
+`;
+
+/**
+ * Transition Dyno — blends between two splat states.
+ *
+ * Adapted from spark's lofi example `transitionSplats`, with one key
+ * difference: the lofi example assumes all worlds share the same splat
+ * count (same SplatMesh, swapped packedSplats). Odyssey's environments
+ * have different splat counts, so when the target has fewer splats than
+ * the source, `readPackedSplat` returns an inactive gsplat (flags=0,
+ * zeroed center/scales/rgba). A naive `mix` toward zeros collapses the
+ * outgoing splat to the origin and shrinks it — the "collapse to center"
+ * artifact.
+ *
+ * Fix: check both source and target active flags.
+ * - Both active: normal blend (lofi-style morph).
+ * - Source active, target inactive: fade alpha to 0.
+ * - Source inactive, target active: fade alpha from 0 to target's alpha.
+ * - Both inactive: no output (stays inactive).
+ */
+function createTransitionDyno() {
   return new dyno.Dyno({
     inTypes: {
-      gsplat: dyno.Gsplat,
-      fromIndex: "int",
-      toIndex: "int",
-      progress: "float",
-      objectIndex: "int",
-      randomRadius: "float",
+      gsplat1: dyno.Gsplat,
+      gsplat2: dyno.Gsplat,
+      t: "float",
     },
     outTypes: { gsplat: dyno.Gsplat },
-    globals: () => [
-      dyno.unindent(`
-        vec3 morphHash3(int n) {
-          float x = float(n);
-          return fract(sin(vec3(x, x + 1.0, x + 2.0)) * 43758.5453123);
-        }
-        float morphEase(float x) { return x * x * (3.0 - 2.0 * x); }
-        vec3 morphRandPos(int splatIndex, float radius) {
-          vec3 h = morphHash3(splatIndex);
-          float theta = 6.28318530718 * h.x;
-          float r = radius * sqrt(h.y);
-          return vec3(r * cos(theta), 0.0, r * sin(theta));
-        }
-      `),
-    ],
+    globals: () => [SLERP_GLSL],
     statements: ({ inputs, outputs }) =>
       dyno.unindentLines(`
-        ${outputs.gsplat} = ${inputs.gsplat};
-        int idx = ${inputs.objectIndex};
-        int fromIdx = ${inputs.fromIndex};
-        int toIdx = ${inputs.toIndex};
-        float progress = ${inputs.progress};
-
-        vec3 rp = morphRandPos(int(${inputs.gsplat}.index), ${inputs.randomRadius});
-        vec3 rpMid = mix(${inputs.gsplat}.center, rp, 0.7);
-
-        float alpha = 0.0;
-        vec3 pos = ${inputs.gsplat}.center;
-        vec3 origScale = ${inputs.gsplat}.scales;
-        vec3 small = origScale * 0.2;
-
-        bool noTransition = fromIdx == toIdx;
-
-        if (noTransition && idx == fromIdx) {
-          alpha = 1.0;
-        } else if (idx == fromIdx) {
-          if (progress < 0.5) {
-            float s = progress / 0.5;
-            alpha = 1.0 - morphEase(s) * 0.5;
-            pos = mix(${inputs.gsplat}.center, rpMid, morphEase(s));
-            ${outputs.gsplat}.scales = mix(origScale, small, morphEase(s));
-          } else {
-            alpha = 0.0;
-            pos = rpMid;
-            ${outputs.gsplat}.scales = small;
-          }
-        } else if (idx == toIdx) {
-          if (progress <= 0.5) {
-            alpha = 0.0;
-            pos = rpMid;
-            ${outputs.gsplat}.scales = small;
-          } else {
-            float s = (progress - 0.5) / 0.5;
-            alpha = max(morphEase(s), 0.5);
-            pos = mix(rpMid, ${inputs.gsplat}.center, morphEase(s));
-            ${outputs.gsplat}.scales = mix(small, origScale, morphEase(s));
-          }
+        ${outputs.gsplat} = ${inputs.gsplat1};
+        bool srcActive = isGsplatActive(${inputs.gsplat1}.flags);
+        bool dstActive = isGsplatActive(${inputs.gsplat2}.flags);
+        if (srcActive && dstActive) {
+          ${outputs.gsplat}.center = mix(${inputs.gsplat1}.center, ${inputs.gsplat2}.center, ${inputs.t});
+          ${outputs.gsplat}.scales = mix(${inputs.gsplat1}.scales, ${inputs.gsplat2}.scales, ${inputs.t});
+          ${outputs.gsplat}.quaternion = morphSlerp(${inputs.gsplat1}.quaternion, ${inputs.gsplat2}.quaternion, ${inputs.t});
+          ${outputs.gsplat}.rgba = mix(${inputs.gsplat1}.rgba, ${inputs.gsplat2}.rgba, ${inputs.t});
+        } else if (srcActive && !dstActive) {
+          ${outputs.gsplat}.rgba.a = ${inputs.gsplat1}.rgba.a * (1.0 - ${inputs.t});
+        } else if (!srcActive && dstActive) {
+          ${outputs.gsplat}.center = ${inputs.gsplat2}.center;
+          ${outputs.gsplat}.scales = ${inputs.gsplat2}.scales;
+          ${outputs.gsplat}.quaternion = ${inputs.gsplat2}.quaternion;
+          ${outputs.gsplat}.rgba = ${inputs.gsplat2}.rgba;
+          ${outputs.gsplat}.rgba.a = ${inputs.gsplat2}.rgba.a * ${inputs.t};
+          ${outputs.gsplat}.flags = GSPLAT_FLAG_ACTIVE;
+        } else {
+          ${outputs.gsplat}.flags = 0u;
         }
-
-        ${outputs.gsplat}.center = pos;
-        ${outputs.gsplat}.rgba.a = ${inputs.gsplat}.rgba.a * alpha;
       `),
   });
 }
 
 /**
- * Wraps the morph Dyno into a `dynoBlock` that can be assigned as a
- * `SplatMesh.worldModifier`.
+ * Fade Dyno — multiplies splat alpha by a uniform value.
+ * Used for the initial fade-in (no splat → first splat) and the final
+ * fade-out (last splat → no splat).
  */
-function createMorphModifier(
-  fromIndex: ReturnType<typeof dyno.dynoInt>,
-  toIndex: ReturnType<typeof dyno.dynoInt>,
-  progress: ReturnType<typeof dyno.dynoFloat>,
-  objectIndex: ReturnType<typeof dyno.dynoInt>,
-  randomRadius: ReturnType<typeof dyno.dynoFloat>,
-) {
-  const dyn = createMorphDyno();
-  return dyno.dynoBlock(
-    { gsplat: dyno.Gsplat },
-    { gsplat: dyno.Gsplat },
-    ({ gsplat }) => ({
-      gsplat: dyn.apply({
-        gsplat,
-        fromIndex,
-        toIndex,
-        progress,
-        objectIndex,
-        randomRadius,
-      }).gsplat,
-    }),
-  );
+function createFadeDyno() {
+  return new dyno.Dyno({
+    inTypes: { gsplat: dyno.Gsplat, alpha: "float" },
+    outTypes: { gsplat: dyno.Gsplat },
+    statements: ({ inputs, outputs }) =>
+      dyno.unindentLines(`
+        ${outputs.gsplat} = ${inputs.gsplat};
+        ${outputs.gsplat}.rgba.a = ${inputs.gsplat}.rgba.a * ${inputs.alpha};
+      `),
+  });
 }
 
-const LOD_RECOVERY_DURATION = 0.5; // seconds.
-const TRANSITION_LOD_SCALE = 0.01; // LOD scale during transition (lower = more aggressive LOD, smoother animation, but more blurring).
+const LOD_RECOVERY_DURATION = 0.5;
+const TRANSITION_LOD_SCALE = 0.01;
 
 /**
- * Loads all gaussian splat meshes up-front and renders the active one.
- * When the environment store's active index changes, a scatter-morph
- * transition plays between the outgoing and incoming splats.
+ * Loads all gaussian splats as PackedSplats up-front and renders a single
+ * SplatMesh. When the environment store's active index changes, a blend
+ * transition plays between the outgoing and incoming splat states —
+ * directly matching the spark lofi example's `transitionSplats` approach.
+ *
+ * - Splat → splat: `objectModifier` blends center/scales/quaternion/rgba.
+ * - No splat → splat (first appearance): fade alpha 0 → 1.
+ * - Splat → no splat (final vanish): fade alpha 1 → 0.
  */
 export function MorphingSplatScene({
   urls,
   positions,
-  transitionDuration = 7.5,
-  randomRadius = 5.0,
+  transitionDuration = 1.5,
 }: MorphingSplatSceneProps) {
   const { gl, scene } = useThree();
   const longWhooshSound = useRef<AudioSourceHandle>(null);
   const shortWhooshSound = useRef<AudioSourceHandle>(null);
 
-  // Shared dyno uniforms — created once, mutated each frame.
-  const fromIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
-  if (fromIndexRef.current === null) fromIndexRef.current = dyno.dynoInt(0);
+  // Shared dyno uniforms.
+  const transitionT = useRef(dyno.dynoFloat(0));
+  const fadeAlpha = useRef(dyno.dynoFloat(0));
 
-  const toIndexRef = useRef<ReturnType<typeof dyno.dynoInt> | null>(null);
-  if (toIndexRef.current === null) toIndexRef.current = dyno.dynoInt(0);
-
-  const progressRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
-  if (progressRef.current === null) progressRef.current = dyno.dynoFloat(1.0);
-
-  const radiusRef = useRef<ReturnType<typeof dyno.dynoFloat> | null>(null);
-  if (radiusRef.current === null)
-    radiusRef.current = dyno.dynoFloat(randomRadius);
-
-  const meshesRef = useRef<Map<number, SplatMesh>>(new Map());
+  const packedRef = useRef<Map<number, PackedSplats>>(new Map());
+  const meshRef = useRef<SplatMesh | null>(null);
   const sparkRef = useRef<SparkRenderer | null>(null);
 
-  /** Internal animation state (not reactive, driven by useFrame). */
-  const transitionState = useRef({
-    displayedIndex: 0,
-    morphAnimationProgress: 1.0,
+  /** Internal animation state. */
+  const state = useRef({
+    displayedIndex: -1, // -1 = no splat shown yet
     animating: false,
-    lodRecoveryProgress: 1.0,
+    progress: 0,
     recoveringLod: false,
+    lodRecoveryProgress: 0,
+    /** "blend" | "fade-in" | "fade-out" */
+    mode: "blend" as "blend" | "fade-in" | "fade-out",
   });
 
-  // Load all splat meshes and wire up morph modifiers.
+  // Load all PackedSplats + create single SplatMesh.
   useEffect(() => {
     let disposed = false;
     const spark = new SparkRenderer({
@@ -192,154 +162,226 @@ export function MorphingSplatScene({
     sparkRef.current = spark;
     scene.add(spark);
 
-    const meshes = new Map<number, SplatMesh>();
+    const packedMap = new Map<number, PackedSplats>();
 
     async function loadAll() {
       for (let i = 0; i < urls.length; i++) {
         if (disposed) return;
-
         const url = urls[i];
-        // Skip environments with no splat (e.g. a default environment).
         if (!url) continue;
 
-        const mesh = new SplatMesh({ url, lod: true });
-        await mesh.initialized;
+        const packed = new PackedSplats({ url, lod: true });
+        await packed.initialized;
         if (disposed) return;
-
-        const pos = positions?.[i];
-        if (pos) mesh.position.set(...pos);
-
-        // Assign the morph modifier so the dyno shader controls visibility.
-        // objectIndex must match the environment index in the store, NOT the
-        // mesh array index, so that from/to indices line up correctly.
-        mesh.worldModifier = createMorphModifier(
-          fromIndexRef.current!,
-          toIndexRef.current!,
-          progressRef.current!,
-          dyno.dynoInt(i),
-          radiusRef.current!,
-        );
-        mesh.updateGenerator();
-
-        // Only the initially-displayed environment should be visible.
-        mesh.visible = i === transitionState.current.displayedIndex;
-
-        scene.add(mesh);
-        meshes.set(i, mesh);
+        packedMap.set(i, packed);
       }
 
-      meshesRef.current = meshes;
+      packedRef.current = packedMap;
+
+      // Create the single SplatMesh — no packedSplats yet (no splat at start).
+      const mesh = new SplatMesh();
+      const pos = positions?.[0];
+      if (pos) mesh.position.set(...pos);
+      meshRef.current = mesh;
+      scene.add(mesh);
+
+      // Start with no splat visible.
+      mesh.visible = false;
     }
 
     loadAll();
 
     return () => {
       disposed = true;
-      meshes.forEach((m) => scene.remove(m));
+      if (meshRef.current) scene.remove(meshRef.current);
       scene.remove(spark);
       sparkRef.current = null;
-      meshesRef.current = new Map();
+      meshRef.current = null;
+      packedMap.forEach((p) => p.dispose());
+      packedRef.current = new Map();
     };
   }, [gl, scene, urls, positions]);
 
-  // Drive the morph animation each frame.
+  // Drive the transition each frame.
   useFrame((_, delta) => {
-    const state = transitionState.current;
+    const s = state.current;
     const targetIndex = environmentStore.activeIndex;
     const storeTransitioning = environmentStore.isTransitioning;
 
     // Detect a new transition request from the store.
-    if (
-      storeTransitioning &&
-      !state.animating &&
-      targetIndex !== state.displayedIndex
-    ) {
-      state.animating = true;
-      state.morphAnimationProgress = 0;
+    if (storeTransitioning && !s.animating && targetIndex !== s.displayedIndex) {
+      const mesh = meshRef.current;
+      const packed = packedRef.current;
+      if (!mesh) return;
 
-      fromIndexRef.current!.value = state.displayedIndex;
-      toIndexRef.current!.value = targetIndex;
-      progressRef.current!.value = 0;
+      const fromPacked = s.displayedIndex >= 0 ? packed.get(s.displayedIndex) : null;
+      const toPacked = packed.get(targetIndex);
 
-      // Drop LOD detail during transition for smooth animation.
-      if (sparkRef.current)
-        sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
+      s.animating = true;
+      s.progress = 0;
 
-      // Make both participating meshes visible for the transition.
-      const meshes = meshesRef.current;
-      const fromMesh = meshes.get(state.displayedIndex);
-      const toMesh = meshes.get(targetIndex);
-      if (fromMesh) {
-        // Normal transition: only "from" is visible during the first half.
-        fromMesh.visible = true;
-        if (toMesh) toMesh.visible = false;
+      if (fromPacked && toPacked) {
+        // Splat → splat: blend transition (lofi-style).
+        s.mode = "blend";
+        transitionT.current.value = 0;
 
-        // Long sound for full transition.
+        // Local const so TS narrows toPacked inside the closure.
+        const targetPacked = toPacked;
+
+        // Set up objectModifier to blend from current to target.
+        mesh.objectModifier = dyno.dynoBlock(
+          { gsplat: dyno.Gsplat },
+          { gsplat: dyno.Gsplat },
+          ({ gsplat }) => {
+            const { index } = dyno.splitGsplat(gsplat!).outputs;
+            // ponytail: use live gsplat as source (lofi pattern) — readPackedSplat
+            // on a non-active packed splat returns garbage; the mesh's current
+            // gsplat already holds the from-state.
+            const splat2 = dyno.readPackedSplat(targetPacked.dyno, index!);
+            const t = dyno.smoothstep(
+              dyno.dynoConst("float", 0),
+              dyno.dynoConst("float", 1),
+              transitionT.current,
+            );
+            return {
+              gsplat: createTransitionDyno().apply({
+                gsplat1: gsplat,
+                gsplat2: splat2,
+                t,
+              }).gsplat,
+            };
+          },
+        );
+        mesh.updateGenerator();
+        mesh.visible = true;
+
+        // Drop LOD during transition.
+        if (sparkRef.current)
+          sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
+
+        longWhooshSound.current?.play();
+      } else if (!fromPacked && toPacked) {
+        // No splat → splat: fade-in.
+        s.mode = "fade-in";
+        fadeAlpha.current.value = 0;
+
+        // Switch to target packed splats immediately, fade alpha.
+        mesh.packedSplats = toPacked;
+        mesh.objectModifier = dyno.dynoBlock(
+          { gsplat: dyno.Gsplat },
+          { gsplat: dyno.Gsplat },
+          ({ gsplat }) => ({
+            gsplat: createFadeDyno().apply({
+              gsplat,
+              alpha: fadeAlpha.current,
+            }).gsplat,
+          }),
+        );
+        mesh.updateGenerator();
+        mesh.visible = true;
+
+        if (sparkRef.current)
+          sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
+
+        shortWhooshSound.current?.play();
+      } else if (fromPacked && !toPacked) {
+        // Splat → no splat: fade-out.
+        s.mode = "fade-out";
+        fadeAlpha.current.value = 1;
+
+        // Keep current packed splats, fade alpha to 0.
+        mesh.objectModifier = dyno.dynoBlock(
+          { gsplat: dyno.Gsplat },
+          { gsplat: dyno.Gsplat },
+          ({ gsplat }) => ({
+            gsplat: createFadeDyno().apply({
+              gsplat,
+              alpha: fadeAlpha.current,
+            }).gsplat,
+          }),
+        );
+        mesh.updateGenerator();
+        mesh.visible = true;
+
+        if (sparkRef.current)
+          sparkRef.current.lodSplatScale = TRANSITION_LOD_SCALE;
+
         longWhooshSound.current?.play();
       } else {
-        // No outgoing splat (e.g. initial environment) — show "to" immediately.
-        state.morphAnimationProgress = 0.5;
-        if (toMesh) toMesh.visible = true;
-
-        // Short sound for single-splat transition.
-        shortWhooshSound.current?.play();
-      }
-    }
-
-    // Advance the morph animation.
-    if (state.animating) {
-      state.morphAnimationProgress = Math.min(
-        state.morphAnimationProgress + delta / transitionDuration,
-        1.0,
-      );
-      progressRef.current!.value = state.morphAnimationProgress;
-
-      const meshes = meshesRef.current;
-      const fromMesh = meshes.get(state.displayedIndex);
-      const toMesh = meshes.get(targetIndex);
-
-      // At the midpoint, swap visibility: hide "from", show "to".
-      // This ensures only one splat mesh is rendered at any time.
-      if (state.morphAnimationProgress >= 0.5) {
-        if (fromMesh) fromMesh.visible = false;
-        if (toMesh) toMesh.visible = true;
-        toMesh?.updateVersion();
-      } else {
-        fromMesh?.updateVersion();
-      }
-
-      // Transition complete — begin LOD recovery ramp.
-      if (state.morphAnimationProgress >= 1.0) {
-        state.animating = false;
-        state.recoveringLod = true;
-        state.lodRecoveryProgress = 0;
-
-        state.displayedIndex = targetIndex;
-
-        fromIndexRef.current!.value = targetIndex;
-        toIndexRef.current!.value = targetIndex;
-        progressRef.current!.value = 1.0;
-
+        // No splat → no splat: instant.
+        s.animating = false;
+        s.displayedIndex = targetIndex;
+        mesh.visible = false;
         environmentStore.completeTransition();
       }
     }
 
-    // Smoothly ramp LOD detail back up after the morph animation.
-    if (state.recoveringLod) {
-      state.lodRecoveryProgress = Math.min(
-        state.lodRecoveryProgress + delta / LOD_RECOVERY_DURATION,
+    // Advance the animation.
+    if (s.animating) {
+      s.progress = Math.min(s.progress + delta / transitionDuration, 1.0);
+      const eased = s.progress * s.progress * (3 - 2 * s.progress);
+
+      const mesh = meshRef.current;
+      if (!mesh) return;
+
+      if (s.mode === "blend") {
+        transitionT.current.value = eased;
+      } else if (s.mode === "fade-in") {
+        fadeAlpha.current.value = eased;
+      } else if (s.mode === "fade-out") {
+        fadeAlpha.current.value = 1.0 - eased;
+      }
+
+      mesh.updateVersion();
+
+      // Transition complete.
+      if (s.progress >= 1.0) {
+        s.animating = false;
+        s.recoveringLod = true;
+        s.lodRecoveryProgress = 0;
+
+        const targetIndex = environmentStore.activeIndex;
+        const packed = packedRef.current;
+
+        if (s.mode === "blend") {
+          // Swap to target packed splats, remove objectModifier.
+          const toPacked = packed.get(targetIndex);
+          if (toPacked) mesh.packedSplats = toPacked;
+          mesh.objectModifier = undefined;
+          mesh.updateGenerator();
+        } else if (s.mode === "fade-in") {
+          // Fade-in done: remove fade modifier.
+          mesh.objectModifier = undefined;
+          mesh.updateGenerator();
+        } else if (s.mode === "fade-out") {
+          // Fade-out done: hide mesh, clear packed splats.
+          mesh.visible = false;
+          mesh.packedSplats = undefined;
+          mesh.objectModifier = undefined;
+          mesh.updateGenerator();
+        }
+
+        s.displayedIndex = targetIndex;
+        environmentStore.completeTransition();
+      }
+    }
+
+    // Smoothly ramp LOD detail back up after transition.
+    if (s.recoveringLod) {
+      s.lodRecoveryProgress = Math.min(
+        s.lodRecoveryProgress + delta / LOD_RECOVERY_DURATION,
         1.0,
       );
       const t =
-        state.lodRecoveryProgress *
-        state.lodRecoveryProgress *
-        (3 - 2 * state.lodRecoveryProgress); // smoothstep.
+        s.lodRecoveryProgress *
+        s.lodRecoveryProgress *
+        (3 - 2 * s.lodRecoveryProgress);
       if (sparkRef.current) {
         sparkRef.current.lodSplatScale =
           TRANSITION_LOD_SCALE + (1.0 - TRANSITION_LOD_SCALE) * t;
       }
-      if (state.lodRecoveryProgress >= 1.0) {
-        state.recoveringLod = false;
+      if (s.lodRecoveryProgress >= 1.0) {
+        s.recoveringLod = false;
         if (sparkRef.current) sparkRef.current.lodSplatScale = 1.0;
       }
     }
