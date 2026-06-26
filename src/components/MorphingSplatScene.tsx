@@ -211,7 +211,9 @@ export function MorphingSplatScene({
           { gsplat: dyno.Gsplat },
           ({ gsplat }) => {
             const { index } = dyno.splitGsplat(gsplat).outputs;
-            const splat1 = dyno.readPackedSplat(fromPacked.dyno, index);
+            // ponytail: use live gsplat as source (lofi pattern) — readPackedSplat
+            // on a non-active packed splat returns garbage; the mesh's current
+            // gsplat already holds the from-state.
             const splat2 = dyno.readPackedSplat(toPacked.dyno, index);
             const t = dyno.smoothstep(
               dyno.dynoConst("float", 0),
@@ -220,7 +222,7 @@ export function MorphingSplatScene({
             );
             return {
               gsplat: createTransitionDyno().apply({
-                gsplat1: splat1,
+                gsplat1: gsplat,
                 gsplat2: splat2,
                 t,
               }).gsplat,
