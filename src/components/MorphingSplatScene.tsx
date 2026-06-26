@@ -41,17 +41,22 @@ vec4 morphSlerp(vec4 q1, vec4 q2, float t) {
 `;
 
 /**
- * Smoothstep helper for GLSL.
- */
-const EASE_GLSL = `
-float morphEase(float x) { return x * x * (3.0 - 2.0 * x); }
-`;
-
-/**
  * Transition Dyno — blends between two splat states.
  *
- * Directly adapted from spark's lofi example `transitionSplats`:
- * interpolates center, scales, quaternion (slerp), and rgba via mix.
+ * Adapted from spark's lofi example `transitionSplats`, with one key
+ * difference: the lofi example assumes all worlds share the same splat
+ * count (same SplatMesh, swapped packedSplats). Odyssey's environments
+ * have different splat counts, so when the target has fewer splats than
+ * the source, `readPackedSplat` returns an inactive gsplat (flags=0,
+ * zeroed center/scales/rgba). A naive `mix` toward zeros collapses the
+ * outgoing splat to the origin and shrinks it — the "collapse to center"
+ * artifact.
+ *
+ * Fix: check both source and target active flags.
+ * - Both active: normal blend (lofi-style morph).
+ * - Source active, target inactive: fade alpha to 0.
+ * - Source inactive, target active: fade alpha from 0 to target's alpha.
+ * - Both inactive: no output (stays inactive).
  */
 function createTransitionDyno() {
   return new dyno.Dyno({
@@ -65,10 +70,25 @@ function createTransitionDyno() {
     statements: ({ inputs, outputs }) =>
       dyno.unindentLines(`
         ${outputs.gsplat} = ${inputs.gsplat1};
-        ${outputs.gsplat}.center = mix(${inputs.gsplat1}.center, ${inputs.gsplat2}.center, ${inputs.t});
-        ${outputs.gsplat}.scales = mix(${inputs.gsplat1}.scales, ${inputs.gsplat2}.scales, ${inputs.t});
-        ${outputs.gsplat}.quaternion = morphSlerp(${inputs.gsplat1}.quaternion, ${inputs.gsplat2}.quaternion, ${inputs.t});
-        ${outputs.gsplat}.rgba = mix(${inputs.gsplat1}.rgba, ${inputs.gsplat2}.rgba, ${inputs.t});
+        bool srcActive = isGsplatActive(${inputs.gsplat1}.flags);
+        bool dstActive = isGsplatActive(${inputs.gsplat2}.flags);
+        if (srcActive && dstActive) {
+          ${outputs.gsplat}.center = mix(${inputs.gsplat1}.center, ${inputs.gsplat2}.center, ${inputs.t});
+          ${outputs.gsplat}.scales = mix(${inputs.gsplat1}.scales, ${inputs.gsplat2}.scales, ${inputs.t});
+          ${outputs.gsplat}.quaternion = morphSlerp(${inputs.gsplat1}.quaternion, ${inputs.gsplat2}.quaternion, ${inputs.t});
+          ${outputs.gsplat}.rgba = mix(${inputs.gsplat1}.rgba, ${inputs.gsplat2}.rgba, ${inputs.t});
+        } else if (srcActive && !dstActive) {
+          ${outputs.gsplat}.rgba.a = ${inputs.gsplat1}.rgba.a * (1.0 - ${inputs.t});
+        } else if (!srcActive && dstActive) {
+          ${outputs.gsplat}.center = ${inputs.gsplat2}.center;
+          ${outputs.gsplat}.scales = ${inputs.gsplat2}.scales;
+          ${outputs.gsplat}.quaternion = ${inputs.gsplat2}.quaternion;
+          ${outputs.gsplat}.rgba = ${inputs.gsplat2}.rgba;
+          ${outputs.gsplat}.rgba.a = ${inputs.gsplat2}.rgba.a * ${inputs.t};
+          ${outputs.gsplat}.flags = GSPLAT_FLAG_ACTIVE;
+        } else {
+          ${outputs.gsplat}.flags = 0u;
+        }
       `),
   });
 }
@@ -205,16 +225,19 @@ export function MorphingSplatScene({
         s.mode = "blend";
         transitionT.current.value = 0;
 
+        // Local const so TS narrows toPacked inside the closure.
+        const targetPacked = toPacked;
+
         // Set up objectModifier to blend from current to target.
         mesh.objectModifier = dyno.dynoBlock(
           { gsplat: dyno.Gsplat },
           { gsplat: dyno.Gsplat },
           ({ gsplat }) => {
-            const { index } = dyno.splitGsplat(gsplat).outputs;
+            const { index } = dyno.splitGsplat(gsplat!).outputs;
             // ponytail: use live gsplat as source (lofi pattern) — readPackedSplat
             // on a non-active packed splat returns garbage; the mesh's current
             // gsplat already holds the from-state.
-            const splat2 = dyno.readPackedSplat(toPacked.dyno, index);
+            const splat2 = dyno.readPackedSplat(targetPacked.dyno, index!);
             const t = dyno.smoothstep(
               dyno.dynoConst("float", 0),
               dyno.dynoConst("float", 1),
