@@ -32,6 +32,7 @@ export function UI(props: ContainerProperties) {
           <PreviousEnvironmentButton />
           <StartButton {...props} />
           <EnterXRButton />
+          <EnterXRButton mode="immersive-ar" />
           <NextEnvironmentButton />
         </Container>
       </Container>
@@ -93,8 +94,13 @@ export function StartButton(props: ContainerProperties) {
 
 /**
  * Button to enter XR for the Post-Human God session. Hold to record.
+ * `immersive-ar` runs on passthrough and enables the reality dissolve
+ * (depth sensing); the default `immersive-vr` is fully virtual.
  */
-export function EnterXRButton(props: ContainerProperties) {
+export function EnterXRButton({
+  mode = "immersive-vr",
+  ...props
+}: ContainerProperties & { mode?: "immersive-vr" | "immersive-ar" }) {
   const store = useXRStore();
 
   const enterXRButtonOpacity = useSignal(DEFAULT_OPACITY);
@@ -122,11 +128,11 @@ export function EnterXRButton(props: ContainerProperties) {
           enterXRButtonOpacitySpring.start(DEFAULT_OPACITY);
         }
       }}
-      onClick={() => store.enterVR()}
+      onClick={() => (mode === "immersive-ar" ? store.enterAR() : store.enterVR())}
       {...props}
     >
       <Text textAlign="center" fontWeight="black" color="black">
-        Enter XR
+        {mode === "immersive-ar" ? "Enter AR" : "Enter XR"}
       </Text>
     </Container>
   );

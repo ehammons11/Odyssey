@@ -5,7 +5,10 @@ import {
   SRGBColorSpace,
   RepeatWrapping,
 } from "three";
-import { type ThreeElements } from "@react-three/fiber";
+import { type ThreeElements, useFrame } from "@react-three/fiber";
+import { useRef } from "react";
+import type { Group } from "three";
+import { dissolveStore } from "../stores/dissolveStore";
 
 const loader = new TextureLoader();
 
@@ -55,10 +58,24 @@ const concreteWallMaterial = new MeshStandardMaterial({
 
 /**
  * Renders a large concrete dome.
+ *
+ * During the reality dissolve the dome fades out in lockstep with the splat
+ * progress so passthrough shows through as the splats fly onto real
+ * surfaces.
  */
 export function Dome(props: ThreeElements["group"]) {
+  const groupRef = useRef<Group>(null);
+
+  useFrame(() => {
+    const fading = dissolveStore.status !== "idle";
+    const progress = dissolveStore.progress;
+    concreteWallMaterial.transparent = fading;
+    concreteWallMaterial.opacity = fading ? 1 - progress : 1;
+    if (groupRef.current) groupRef.current.visible = progress < 1;
+  });
+
   return (
-    <group {...props} dispose={null}>
+    <group ref={groupRef} {...props} dispose={null}>
       <mesh material={concreteWallMaterial}>
         <sphereGeometry
           args={[500, 128, 128, undefined, undefined, undefined, Math.PI / 2]}

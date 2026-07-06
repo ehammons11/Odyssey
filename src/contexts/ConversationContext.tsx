@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useConversation } from "@elevenlabs/react";
 import { environmentStore } from "../stores/environmentStore";
+import { dissolveStore } from "../stores/dissolveStore";
 
 interface ConversationContextType {
   conversation: ReturnType<typeof useConversation>;
@@ -109,7 +110,21 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       clientTools: {
         changeEnvironment: async () => {
           console.log("Received request to change environment");
-          environmentStore.next();
+          if (environmentStore.isTransitioning) return;
+          // Past the final environment the odyssey ends: dissolve the splats
+          // into reality instead of wrapping back to the first environment.
+          if (environmentStore.activeIndex === environmentStore.count - 1) {
+            dissolveStore.start();
+          } else {
+            environmentStore.next();
+          }
+        },
+        // Explicit ending trigger, so the agent can end the odyssey from any
+        // environment. Requires adding a matching client tool named
+        // "dissolveIntoReality" in the ElevenLabs agent configuration.
+        dissolveIntoReality: async () => {
+          console.log("Received request to dissolve into reality");
+          dissolveStore.start();
         },
       },
     });

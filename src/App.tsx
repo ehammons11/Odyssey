@@ -15,6 +15,7 @@ import { AudioSource } from "./components/audio/AudioSource";
 import { AudioProvider } from "./contexts/AudioContext";
 import { useConversationContext } from "./hooks/useConversationContext";
 import { Suspense, useEffect, useRef } from "react";
+import { RealityDissolve } from "./components/RealityDissolve";
 
 function SceneContent() {
   useSignals();
@@ -49,6 +50,10 @@ function App() {
     frameBufferScaling: 0.85,
     meshDetection: false,
     planeDetection: false,
+    // Requests the depth-sensing feature (gpu-optimized). Occlusion is
+    // separately disabled inside RealityDissolve by patching
+    // getDepthSensingMesh — do NOT remove this feature to avoid occlusion.
+    depthSensing: true,
   });
 
   return (
@@ -74,6 +79,8 @@ function App() {
           </AudioProvider>
 
           <Environment background files="./environmentMaps/puresky_2.exr" />
+
+          <RealityDissolve />
 
           <SceneFader />
 
