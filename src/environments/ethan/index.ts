@@ -16,7 +16,7 @@ export const ethanEnvironments: EnvironmentProps[] = [
   },
   {
     name: "Apocalyptic City",
-    splatUrl: "/splats/apocalypticCity-lod.rad",
+    splatUrl: "/splats/apocalypticCity.spz",
     lights: [
       { type: "ambient", intensity: 0.8 },
       { type: "directional", intensity: 2, position: [5, 6, -20] },
@@ -25,7 +25,7 @@ export const ethanEnvironments: EnvironmentProps[] = [
   },
   {
     name: "Peaceful Swamp",
-    splatUrl: "/splats/swamp-lod.rad",
+    splatUrl: "/splats/swamp.spz",
     lights: [
       { type: "ambient", intensity: 0.8 },
       { type: "directional", intensity: 2, position: [0, 6, -20] },
@@ -34,7 +34,7 @@ export const ethanEnvironments: EnvironmentProps[] = [
   },
   {
     name: "Renaissance Workshop",
-    splatUrl: "/splats/renaissanceWorkshop-lod.rad",
+    splatUrl: "/splats/workshop.spz",
     lights: [
       { type: "ambient", intensity: 2.5 },
       { type: "directional", intensity: 1, position: [0, 6, -20] },
