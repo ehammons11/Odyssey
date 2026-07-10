@@ -110,14 +110,9 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
       clientTools: {
         changeEnvironment: async () => {
           console.log("Received request to change environment");
-          if (environmentStore.isTransitioning) return;
-          // Past the final environment the odyssey ends: dissolve the splats
-          // into reality instead of wrapping back to the first environment.
-          if (environmentStore.activeIndex === environmentStore.count - 1) {
-            dissolveStore.start();
-          } else {
-            environmentStore.next();
-          }
+          // Advancing past the final environment starts the "dissolve into
+          // reality" ending — that rule lives in environmentStore.next().
+          environmentStore.next();
         },
         // Explicit ending trigger, so the agent can end the odyssey from any
         // environment. Requires adding a matching client tool named

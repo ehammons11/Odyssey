@@ -1,4 +1,5 @@
 import { deepSignal } from "deepsignal";
+import { dissolveStore } from "./dissolveStore";
 
 /**
  * Reactive store for tracking the active environment index.
@@ -13,7 +14,10 @@ import { deepSignal } from "deepsignal";
  *
  * @method setEnvironmentCount Configure the store for a new environment set. Resets the index to 0.
  *
- * @method next Advance to the next environment (wraps around). Blocked during transitions.
+ * @method next Advance to the next environment. Advancing past the LAST
+ *   environment does not wrap: it starts the "dissolve into reality" ending
+ *   instead (outside AR the dissolve arms and fires once an AR session with
+ *   depth is available). Blocked during transitions.
  *
  * @method previous Go back to the previous environment (wraps around). Blocked during transitions.
  *
@@ -31,9 +35,16 @@ export const environmentStore = deepSignal({
   next() {
     if (environmentStore.count === 0 || environmentStore.isTransitioning)
       return;
+    // Past the final environment the odyssey ends: dissolve the splats into
+    // reality instead of wrapping back to the first environment. This lives
+    // here (not in individual triggers) so the agent tool, the desktop UI,
+    // and any future trigger all end the same way.
+    if (environmentStore.activeIndex === environmentStore.count - 1) {
+      dissolveStore.start();
+      return;
+    }
     environmentStore.isTransitioning = true;
-    environmentStore.activeIndex =
-      (environmentStore.activeIndex + 1) % environmentStore.count;
+    environmentStore.activeIndex += 1;
   },
   previous() {
     if (environmentStore.count === 0 || environmentStore.isTransitioning)
